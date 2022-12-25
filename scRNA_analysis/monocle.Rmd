@@ -1,0 +1,124 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+```{r}
+library(monocle3)
+library(Matrix)
+library(Seurat)
+library(SeuratWrappers)
+```
+
+
+```{r}
+# Read in data
+file = "aggr_data2/outs/count/filtered_feature_bc_matrix"
+
+data <- Read10X(file)
+sdata <- CreateSeuratObject(data)
+
+
+
+# Read in metadata
+meta <- read.csv(file = "sample_metadata.csv")
+head(meta)
+colnames(meta)
+
+fileName <- "mitochondria_genes.txt"
+mit_genes <- readChar(fileName, file.info(fileName)$size) # Read in Data
+mit_genes <- strsplit(mit_genes, ", ") # Make into a list by splitting from commas
+mit_genes <- gsub("'","",mit_genes[[1]]) # Remove extra quotations by iterating over the list
+mit_genes <- gsub("\n","",mit_genes)
+
+# Set up metadata columns
+sdata[["percent.mt"]] <- PercentageFeatureSet(sdata,features = mit_genes)
+sdata[["sample"]] <- meta$sample
+sdata[["sample.tag"]] <- meta$sample.tag
+sdata[["tumor.tag"]] <- meta$tumor.tag
+sdata[["tumor.status"]] <- meta$tumor.status
+
+
+
+# Filtering
+sdata <- subset(sdata, subset = (percent.mt < 10 & nFeature_RNA > 500 & nFeature_RNA < 8000))
+
+
+
+# Once we have our filtered data, we generate a monocle3 object i.e. a CellDataSet object.
+sdata@active.assay = "RNA"
+sdata.cds <- as.cell_data_set(sdata)
+
+
+
+# We get the genes we want to use for dimensionality reduction.
+expr_data <- GetAssayData(sdata, slot = "data")
+expr_data[expr_data != 0] <- 1
+numCells <- rowSums(expr_data)
+
+threshold <- 0.95 * dim(sdata)[2]
+
+bigGenes <- names(numCells[which(numCells > threshold)]) # These are the genes
+
+
+
+# Do dimensionality reduction.
+p_sdata.cds <- preprocess_cds(sdata.cds, use_genes = bigGenes) # Default is PCA reduction, 50 dimensions + log-normalisation.
+
+# plot_pc_variance_explained(p_sdata.cds) and plot_cells(p_sdata.cds, reduction = "PCA) shows that it gives same output as Seurat.
+
+p_sdata.cds <- reduce_dimension(p_sdata.cds, reduction = "UMAP", verbose = TRUE)
+
+plot_cells(p_sdata.cds, color_cells_by = "tumor.tag")
+```
+
+
+```{r}
+plot_cells(p_sdata.cds,genes=bigGenes[1:5]) # See gene expression variation
+
+p_sdata.cds <- cluster_cells(p_sdata.cds) # Cluster
+
+plot_cells(p_sdata.cds, color_cells_by = "partition") # Plot with partition (or cluster)
+
+# Learn the trajectory graph
+p_sdata.cds <- learn_graph(p_sdata.cds)
+
+plot_cells(p_sdata.cds, color_cells_by = "sample.tag")
+```
+
+
+```{r}
+p_sdata.cds <- order_cells(p_sdata.cds) # Choose cell(s) that you want to set as having pseudotime 0.
+
+# Plotting by pseudotime
+plot_cells(p_sdata.cds, color_cells_by = "pseudotime")
+
+# The root nodes can also be selected programmatically - and given to order_cells by root_pr_nodes argument.
+```
+
+
+```{r}
+# Choosing cells along a path
+p_sdata.cds <- choose_graph_segments(p_sdata.cds)
+plot_cells(p_sdata.cds, color_cells_by = "pseudotime")
+
+# 3D Trajectories
+cds_3d <- preprocess_cds(p_sdata.cds, use_genes = bigGenes)
+cds_3d <- reduce_dimension(cds_3d, max_components = 3)
+cds_3d <- cluster_cells(cds_3d)
+cds_3d <- learn_graph(cds_3d)
+
+plot_cells_3d(cds_3d, color_cells_by = "tumor.tag")
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.

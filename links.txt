@@ -1,0 +1,11 @@
+# Store file names from https://www.ebi.ac.uk/ena/browser/view/PRJNA699369?show=reads
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644608/possorted_genome_bam11.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644609/possorted_genome_bam10.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644610/possorted_genome_bam9.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644611/possorted_genome_bam8.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644612/possorted_genome_bam6.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644613/possorted_genome_bam4.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644614/possorted_genome_bam3.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644615/possorted_genome_bam13.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644616/possorted_genome_bam2.bam.1
+ftp://ftp.sra.ebi.ac.uk/vol1/run/SRR136/SRR13644617/possorted_genome_bam1.bam.1

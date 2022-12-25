@@ -1,0 +1,211 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+```{r} 
+library(Seurat)
+library(Matrix)
+library(zeallot)
+library(hdf5r)
+library(ggplot2)
+library(ggfortify)
+library(harmony)
+```
+
+```{r}
+# Reading data
+pbmc.data <- Read10X("aggr_data2/outs/count/filtered_feature_bc_matrix")
+pbmc <- CreateSeuratObject(pbmc.data)
+
+# Reading the metadata that I generated elsewhere
+meta <- read.csv(file = "sample_metadata.csv")
+
+# Reading the name of the mitochondrial genes.
+fileName <- "mitochondria_genes.txt"
+mit_genes <- readChar(fileName, file.info(fileName)$size) # Read in Data
+mit_genes <- strsplit(mit_genes, ", ") # Make into a list by splitting from commas
+mit_genes <- gsub("'","",mit_genes[[1]]) # Remove extra quotations by iterating over the list
+mit_genes <- gsub("\n","",mit_genes)
+```
+
+
+```{r}
+# Defining meta data
+pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc,features = mit_genes)
+pbmc[["sample"]] <- meta$sample
+pbmc[["sample_tag"]] <- meta$sample.tag
+pbmc[["tumor.tag"]] <- meta$tumor.tag
+pbmc[["tumor.status"]] <- meta$tumor.status
+
+# Filtering
+pbmc <- subset(pbmc, subset = (percent.mt < 10 & nFeature_RNA > 500 & nFeature_RNA < 8000))
+
+# Selecting genes for PCA
+expr_data <- GetAssayData(pbmc, slot = "data")
+expr_data[expr_data != 0] <- 1
+numCells <- rowSums(expr_data)
+
+threshold <- 0.95 * dim(pbmc)[2]
+
+bigGenes <- names(numCells[which(numCells >= threshold)]) # Names of genes expressed in >= 95% of samples
+ 
+# Normalising data
+#pbmc <- NormalizeData(pbmc)
+
+# Scaling data at the relevant features
+#pbmc <- ScaleData(pbmc, features = bigGenes)
+
+# Doing PCA
+# pbmc <- RunPCA(pbmc, features = bigGenes, npcs = 25)
+
+expr_data <- GetAssayData(pbmc, slot = "counts") # Now, we care about QUANTITY of expression,
+                                              # not only the PRESENCE of expression.
+
+subset_expr <- expr_data[bigGenes,] # Choose expression data of only the big genes
+pca_res <- prcomp(t(subset_expr), retx = TRUE) # Do PCA on transpose of subsetted data
+
+p1 <- pca_res$x[,1]
+p2 <- pca_res$x[,2]
+
+df <- data.frame(p1,p2)
+
+# ggplot() + geom_point(aes(x = p1, y = p2)) # p1 is negative of what they have in the paper
+Sample <- unname(unlist(pbmc[["tumor.tag"]]))
+                 
+qplot(p1,p2, color = Sample, xlab = "Component 1", ylab="Component 2")
+
+ggplot(data = df, mapping = aes(x = p1, y = p2, color = Sample)) + geom_point(size = 0.5) # The PCA
+ggplot() + geom_point(aes(x = 1:84, y = pca_res$sdev^2/sum(pca_res$sdev^2))) + labs(x = "Component", y = "Explained Variance") # Elbow plot
+```
+
+
+```{r}
+# Scale Data, then do PCA again on scaled data.
+pbmc <- NormalizeData(pbmc)
+pbmc <- ScaleData(pbmc, features = bigGenes)
+
+# Do PCA
+dat <- GetAssayData(pbmc, "scale.data")
+dat <- t(dat) # tranpose of it
+
+scaled_pca <- prcomp(dat, retx = TRUE)
+
+# Plot
+p1_s <- scaled_pca$x[,1]
+p2_s <- scaled_pca$x[,2]
+
+df2 <- data.frame(p1_s,p2_s)
+
+ggplot(data = df2, mapping = aes(x = p1_s, y = p2_s, color = Sample)) + geom_point(size = 0.5) # The PCA
+
+#qplot(p1_s, p2_s, xlab = "Component 1", ylab = "Component 2", color = Sample)
+ggsave("PCA-scaled.jpeg", path = "./plots")
+
+
+```
+
+
+```{r, figures-side, fig.show = "hold", out.width = "50%"}
+# PCA - Run PCA with Seurat
+pbmc <- ScaleData(pbmc, features = bigGenes)
+pbmc <- RunPCA(pbmc, features = bigGenes, npcs = 25)
+
+ElbowPlot(pbmc)
+ggsave("PCA-ElbowPlot.jpeg", path = "./plots")
+DimPlot(pbmc, reduction = "pca", group.by = "tumor.tag")
+ggsave("PCA-Seurat.jpeg", path = "./plots")
+
+# Clusters and Neighbours
+pbmc <- FindNeighbors(pbmc, dims = 1:10) 
+pbmc <- FindClusters(pbmc, resolution = 0.6)
+
+# UMAP
+pbmc <- RunUMAP(pbmc, dims = 1:10)
+
+# Plot UMAP
+pbmc <- ScaleData(pbmc, features = rownames(pbmc))
+DimPlot(pbmc, reduction = "umap", group.by = "tumor.tag")
+#ggsave("UMAP.jpeg", path = "./plots")
+```
+
+
+```{r, figures-side, fig.show = "hold", out.width = "50%"}
+library(umap)
+```
+
+
+
+```{r, figures-side, fig.show = "hold", out.width = "50%"}
+# Side-stuff: An Alternate way to find variable genes. 
+
+# Normalise data. Also. note that this is the other way to find variable features.
+
+pbmc <- FindVariableFeatures(pbmc, selection.method = "vst", nfeatures = 2000) # Math here
+
+# Identify top 10 
+top10 <- head(VariableFeatures(pbmc),10)
+
+# Scale the top 10
+pbmc <- ScaleData(pbmc, features = top10)
+
+# Do PCA.
+pbmc <- RunPCA(pbmc, features = top10, npcs = 25)
+
+# Visualise
+ElbowPlot(pbmc)
+DimPlot(pbmc, reduction = "pca", group.by = "tumor.tag")
+```
+```{r}
+weight_matrix <- pbmc[['pca']]@feature.loadings # Access pca data
+pc1 = weight_matrix[,1]
+pc2 = weight_matrix[,2] 
+df <- data.frame(pc1, pc2)
+ElbowPlot(pbmc)
+```
+
+
+```{r}
+# Print things out to help you visualise your data processing
+c(sort_pc1, inds) %<-% sort(pc1, decreasing = TRUE, index.return = TRUE) # sort in decreasing order of pc1 values
+
+# Analysing PC1 components
+boxplot(pc1)
+hist(pc1)
+
+# Doing statistics
+med_pc1 <- median(pc1)
+iqr <- IQR(pc1)
+first_quartile <- quantile(pc1, 0.25)
+third_quartile <- quantile(pc1, 0.75)
+
+# Choosing genes that have highest magnitude in pc1.
+defining_genes <- names(which(pc1 > quantile(pc1, 0.95)))
+```
+
+
+```{r}
+# Classifying tumor wise
+DimPlot(pbmc, reduction = 'pca',group.by = "tumor.tag") # According to the type of tumor it is obtained from
+
+expr_data <- GetAssayData(pbmc, slot = "data")
+expr_data[expr_data != 0] <- 1
+
+# Plot PCA 
+# 1) Do PCA w/ 95% available features genes
+# Then, repeat plots + analysis.
+# Compare plots from your filtering vs. theirs - which one might be better? Why?
+
+#pbmc@assays[["RNA"]]@data
+```
+
+
+

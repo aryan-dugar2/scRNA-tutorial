@@ -1,0 +1,31 @@
+
+ The Advanced Research Computing at Hopkins (ARCH)
+ SLURM job script for run RStudio into Singularity container
+ Support:  help@rockfish.jhu.edu 
+
+
+ Using Singularity image: /home/adugar1/singularity/r-studio/rstudio_2022.02.2_485.sif 
+
+
+1. SSH tunnel from your workstation using the following command:
+
+   ssh -N -L 51395:c703:51395 adugar1@login.rockfish.jhu.edu
+
+2. log in to RStudio Server in your web browser using the Rockfish cluster credentials (username and password) at:
+
+   http://localhost:51395
+
+   user: adugar1
+   password: < Rochkfish password >
+
+3. When done using RStudio Server, terminate the job by:
+
+   a. Exit the RStudio Session ("power" button in the top right corner of the RStudio window)
+   b. Issue the following command on the login node:
+
+  scancel -f 8981825
+**Which rsession
+/usr/lib/rstudio-server/bin/rsession
+Launching rsession...
++ exec rsession --r-libs-user /home/adugar1/R/4.1.3 -u adugar1 --session-use-secure-cookies 0 --session-root-path / --session-same-site 0 --launcher-token 10F7A31C --session-timeout-minutes 0 --r-restore-workspace 2 --r-run-rprofile 2
+slurmstepd: error: *** JOB 8981825 ON c703 CANCELLED AT 2022-09-03T14:25:01 DUE TO TIME LIMIT ***
